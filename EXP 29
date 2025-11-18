@@ -1,0 +1,66 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <inttypes.h>
+#include <string.h>
+
+/*
+  Simple simulator for the "ignore permutation" scenario in SHA-3 / Keccak:
+  - State: 25 lanes (each 64-bit)
+  - r = 1024 bits => 16 lanes are bitrate lanes (we choose lanes 0..15)
+  - c = 576 bits => 9 lanes are capacity lanes (we choose lanes 16..24)
+  - We assume P0 provides nonzero content in each of its 16 lanes.
+  - We apply only the XOR absorption step (no permutation).
+  - We then show that capacity lanes stay zero forever under these assumptions.
+*/
+
+int main(void) {
+    const int TOTAL_LANES = 25;
+    const int LANE_BITS = 64;
+    const int BITRATE_LANES = 16; // r/w = 1024/64 = 16
+    const int CAPACITY_LANES = 9; // c/w = 576/64 = 9
+
+    uint64_t state[TOTAL_LANES];
+    uint64_t P0[BITRATE_LANES];
+
+    // Initialize state: all-zero
+    memset(state, 0, sizeof(state));
+
+    // Prepare P0: make each lane nonzero (assumption of the problem)
+    for (int i = 0; i < BITRATE_LANES; ++i) {
+        // set each lane to a nonzero pattern (different for visibility)
+        P0[i] = (uint64_t) (0xF0F0F0F000000000ULL | (uint64_t)(i + 1));
+    }
+
+    printf("Initial state lanes (0..24):\n");
+    for (int i = 0; i < TOTAL_LANES; ++i) {
+        printf(" lane %2d: 0x%016" PRIx64 "\n", i, state[i]);
+    }
+
+    // Absorb P0: XOR P0 into bitrate lanes (we choose lanes 0..15 as bitrate)
+    for (int i = 0; i < BITRATE_LANES; ++i) {
+        state[i] ^= P0[i];
+    }
+
+    printf("\nAfter absorbing P0 (XOR into bitrate lanes 0..15):\n");
+    for (int i = 0; i < TOTAL_LANES; ++i) {
+        printf(" lane %2d: 0x%016" PRIx64 "%s\n",
+               i, state[i], (i >= BITRATE_LANES ? "  (capacity lane)" : ""));
+    }
+
+    // Check whether any capacity lane is nonzero
+    int capacity_nonzero = 0;
+    for (int i = BITRATE_LANES; i < TOTAL_LANES; ++i) {
+        if (state[i] != 0) capacity_nonzero = 1;
+    }
+
+    if (!capacity_nonzero) {
+        printf("\nObservation: All %d capacity lanes are still zero.\n", CAPACITY_LANES);
+        printf("Because no permutation (mixing) was applied, message bits only touched bitrate lanes.\n");
+        printf("Therefore the capacity lanes will remain zero forever under the 'ignore permutation' assumption.\n");
+        printf("Time until all capacity lanes have at least one nonzero bit: INFINITE (they never become nonzero).\n");
+    } else {
+        printf("\nSome capacity lanes are nonzero (this would indicate mixing occurred).\n");
+    }
+
+    return 0;
+}
