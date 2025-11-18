@@ -1,0 +1,99 @@
+/* playfair.c
+   Compile: gcc playfair.c -o playfair
+   Usage: ./playfair
+*/
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+void make_table(const char *key, char table[5][5]) {
+    int used[26]={0};
+    used['J'-'A'] = 1; // merge J into I
+    char seq[25];
+    int idx=0;
+    for (int i=0; key[i]; ++i) {
+        char c = toupper(key[i]);
+        if (c<'A' || c>'Z') continue;
+        if (c=='J') c='I';
+        if (!used[c-'A']) { used[c-'A']=1; seq[idx++]=c; }
+    }
+    for (char c='A'; c<='Z'; ++c) {
+        if (!used[c-'A']) { seq[idx++]=c; }
+    }
+    int k=0;
+    for (int r=0;r<5;r++) for (int c=0;c<5;c++) table[r][c]=seq[k++];
+}
+
+void prepare_text(const char *in, char *out) {
+    // remove non-letters, uppercase, replace J->I; insert X between doubles in digraphs; pad X if needed
+    char temp[2048]; int t=0;
+    for (int i=0; in[i]; ++i) {
+        if (isalpha(in[i])) {
+            char c = toupper(in[i]);
+            if (c=='J') c='I';
+            temp[t++]=c;
+        }
+    }
+    int o=0;
+    for (int i=0;i<t;i+=1) {
+        char a = temp[i];
+        char b = (i+1<t) ? temp[i+1] : 0;
+        if (b==0) { out[o++]=a; out[o++]='X'; }
+        else if (a==b) { out[o++]=a; out[o++]='X'; }
+        else { out[o++]=a; out[o++]=b; i+=1; }
+    }
+    out[o]=0;
+}
+
+void find_pos(char table[5][5], char ch, int *r, int *c) {
+    for (int i=0;i<5;i++) for (int j=0;j<5;j++) if (table[i][j]==ch) { *r=i; *c=j; return; }
+}
+
+void process(const char *text, char *out, char table[5][5], int encrypt) {
+    int n = strlen(text);
+    for (int i=0;i<n;i+=2) {
+        char a = text[i], b = text[i+1];
+        int ra,ca,rb,cb;
+        find_pos(table,a,&ra,&ca); find_pos(table,b,&rb,&cb);
+        if (ra==rb) {
+            // same row
+            if (encrypt) { out[i]=table[ra][(ca+1)%5]; out[i+1]=table[rb][(cb+1)%5]; }
+            else { out[i]=table[ra][(ca+4)%5]; out[i+1]=table[rb][(cb+4)%5]; }
+        } else if (ca==cb) {
+            // same column
+            if (encrypt) { out[i]=table[(ra+1)%5][ca]; out[i+1]=table[(rb+1)%5][cb]; }
+            else { out[i]=table[(ra+4)%5][ca]; out[i+1]=table[(rb+4)%5][cb]; }
+        } else {
+            out[i]=table[ra][cb];
+            out[i+1]=table[rb][ca];
+        }
+    }
+    out[n]=0;
+}
+
+int main(void) {
+    char key[256];
+    printf("Enter Playfair key phrase: ");
+    if (!fgets(key, sizeof key, stdin)) return 0;
+    key[strcspn(key,"\n")] = 0;
+    char table[5][5]; make_table(key, table);
+    printf("5x5 Playfair table:\n");
+    for (int r=0;r<5;r++){
+        for (int c=0;c<5;c++) printf("%c ", table[r][c]);
+        printf("\n");
+    }
+    char mode[8];
+    printf("Encrypt or decrypt? (e/d): ");
+    if (!fgets(mode, sizeof mode, stdin)) return 0;
+    int enc = (mode[0]=='e' || mode[0]=='E');
+    char input[2048], prepared[2048], output[2048];
+    printf("Enter text: ");
+    if (!fgets(input, sizeof input, stdin)) return 0;
+    input[strcspn(input,"\n")] = 0;
+    prepare_text(input, prepared);
+    if (strlen(prepared)%2) strcat(prepared,"X");
+    process(prepared, output, table, enc);
+    printf("%s\n", output);
+    return 0;
+}
+
