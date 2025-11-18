@@ -1,0 +1,55 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+
+void monoalphabeticEncrypt(char *text, char *key) {
+    char ch;
+    for (int i = 0; text[i] != '\0'; i++) {
+        ch = text[i];
+
+        // Encrypt uppercase letters
+        if (isupper(ch)) {
+            text[i] = toupper(key[ch - 'A']);
+        }
+        // Encrypt lowercase letters
+        else if (islower(ch)) {
+            text[i] = tolower(key[ch - 'a']);
+        }
+        // Leave other characters as they are
+    }
+}
+
+int isValidKey(char *key) {
+    int freq[26] = {0};
+
+    for (int i = 0; i < 26; i++) {
+        if (!isalpha(key[i]))
+            return 0;
+        int index = tolower(key[i]) - 'a';
+        if (freq[index] > 0)
+            return 0;
+        freq[index]++;
+    }
+    return 1;
+}
+
+int main() {
+    char text[100];
+    char key[27];
+
+    printf("Enter a message to encrypt: ");
+    fgets(text, sizeof(text), stdin);
+
+    printf("Enter 26-letter substitution key (e.g., QWERTYUIOPASDFGHJKLZXCVBNM): ");
+    scanf("%26s", key);
+
+    if (strlen(key) != 26 || !isValidKey(key)) {
+        printf("Invalid key! Ensure it's a 26-letter unique alphabet.\n");
+        return 1;
+    }
+
+    monoalphabeticEncrypt(text, key);
+    printf("Encrypted message: %s\n", text);
+
+    return 0;
+}
