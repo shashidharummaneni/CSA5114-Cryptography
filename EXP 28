@@ -1,0 +1,48 @@
+#include <stdio.h>
+#include <stdint.h>
+
+/* Fast modular exponentiation - computes base^exp mod mod */
+uint64_t modexp(uint64_t base, uint64_t exp, uint64_t mod) {
+    uint64_t result = 1;
+    base %= mod;
+    while (exp > 0) {
+        if (exp & 1) {
+            result = (result * base) % mod;
+        }
+        base = (base * base) % mod;
+        exp >>= 1;
+    }
+    return result;
+}
+
+int main() {
+    // Public parameters
+    uint64_t q = 23;       // Prime modulus
+    uint64_t a = 5;        // Primitive root modulo q
+
+    // Private secrets
+    uint64_t x = 6;        // Alice's private key
+    uint64_t y = 15;       // Bob's private key
+
+    // Public exchanges
+    uint64_t A = modexp(a, x, q);   // Alice sends this
+    uint64_t B = modexp(a, y, q);   // Bob sends this
+
+    // Shared key
+    uint64_t key_A = modexp(B, x, q);  // Alice computes
+    uint64_t key_B = modexp(A, y, q);  // Bob computes
+
+    printf("Public parameters: a = %lu, q = %lu\n", a, q);
+    printf("Alice sends: %lu\n", A);
+    printf("Bob sends: %lu\n", B);
+    printf("Alice computes key: %lu\n", key_A);
+    printf("Bob computes key: %lu\n", key_B);
+
+    if (key_A == key_B) {
+        printf("\nKey exchange successful! Shared key = %lu\n", key_A);
+    } else {
+        printf("\nKey mismatch! Something went wrong.\n");
+    }
+
+    return 0;
+}
