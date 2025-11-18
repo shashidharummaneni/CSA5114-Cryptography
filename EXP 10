@@ -1,0 +1,60 @@
+/* playfair_fixedmatrix.c
+   Compile: gcc playfair_fixedmatrix.c -o playfair_fixedmatrix
+   Usage: ./playfair_fixedmatrix
+*/
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+char table[5][5] = {
+    {'M','F','H','I','K'},
+    {'U','N','O','P','Q'},
+    {'Z','V','W','X','Y'},
+    {'E','L','A','R','G'},
+    {'D','S','T','B','C'}
+};
+
+void pos(char ch, int *r, int *c) {
+    if (ch=='J') ch='I';
+    for (int i=0;i<5;i++) for (int j=0;j<5;j++) if (table[i][j]==ch) { *r=i; *c=j; return; }
+}
+
+int main(void) {
+    const char *plain = "Must see you over Cadogan West. Coming at once.";
+    // prepare
+    char temp[1024]; int t=0;
+    for (int i=0; plain[i]; ++i) {
+        if (isalpha(plain[i])) {
+            char c = toupper(plain[i]);
+            if (c=='J') c='I';
+            temp[t++]=c;
+        }
+    }
+    // make digraphs with X filler
+    char digraphs[1024]; int d=0;
+    for (int i=0;i<t;) {
+        char a = temp[i];
+        char b = (i+1 < t) ? temp[i+1] : 0;
+        if (!b) { digraphs[d++]=a; digraphs[d++]='X'; i++; }
+        else if (a==b) { digraphs[d++]=a; digraphs[d++]='X'; i++; }
+        else { digraphs[d++]=a; digraphs[d++]=b; i+=2; }
+    }
+    int n=d;
+    char out[1024]; out[n]=0;
+    for (int i=0;i<n;i+=2) {
+        int ra,ca,rb,cb;
+        pos(digraphs[i],&ra,&ca); pos(digraphs[i+1],&rb,&cb);
+        if (ra==rb) {
+            out[i] = table[ra][(ca+1)%5];
+            out[i+1] = table[rb][(cb+1)%5];
+        } else if (ca==cb) {
+            out[i] = table[(ra+1)%5][ca];
+            out[i+1] = table[(rb+1)%5][cb];
+        } else {
+            out[i] = table[ra][cb];
+            out[i+1] = table[rb][ca];
+        }
+    }
+    printf("Ciphertext: %s\n", out);
+    return 0;
+}
