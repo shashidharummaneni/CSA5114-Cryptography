@@ -1,0 +1,207 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#include <time.h>
+#include <string.h>
+
+/* ---------- utility: modular arithmetic ---------- */
+
+uint64_t modexp(uint64_t base, uint64_t exp, uint64_t mod) {
+    uint64_t res = 1;
+    base %= mod;
+    while (exp) {
+        if (exp & 1) res = (res * base) % mod;
+        base = (base * base) % mod;
+        exp >>= 1;
+    }
+    return res;
+}
+
+/* extended gcd: returns gcd and (via pointers) x,y with a*x + b*y = gcd */
+int64_t egcd(int64_t a, int64_t b, int64_t *x, int64_t *y) {
+    if (b == 0) { *x = 1; *y = 0; return a; }
+    int64_t x1, y1;
+    int64_t g = egcd(b, a % b, &x1, &y1);
+    *x = y1;
+    *y = x1 - (a / b) * y1;
+    return g;
+}
+
+/* modular inverse of a modulo m (assumes gcd(a,m)=1), returns 0 on failure */
+uint64_t modinv(uint64_t a, uint64_t m) {
+    int64_t x, y;
+    int64_t g = egcd((int64_t)a, (int64_t)m, &x, &y);
+    if (g != 1) return 0;
+    x %= (int64_t)m;
+    if (x < 0) x += m;
+    return (uint64_t)x;
+}
+
+/* small "hash" for demo: map message to integer */
+uint64_t simple_hash_uint64(const char *msg, uint64_t mod) {
+    /* Very simple deterministic hash: sum of bytes mod mod */
+    uint64_t h = 0;
+    for (size_t i = 0; i < strlen(msg); ++i) h = (h + (uint8_t)msg[i]) % mod;
+    return h;
+}
+
+/* ---------- Toy DSA (small params for demonstration only) ---------- */
+/* We choose very small primes so computations are easy to follow.
+   DO NOT USE THESE PARAMETERS IN REAL SYSTEMS. */
+
+typedef struct {
+    uint64_t p; // prime
+    uint64_t q; // prime divisor of p-1
+    uint64_t g; // generator of subgroup of order q
+} DSAParams;
+
+typedef struct {
+    uint64_t x; // private key (0 < x < q)
+    uint64_t y; // public key y = g^x mod p
+} DSAKeyPair;
+
+void dsa_keygen(const DSAParams *params, DSAKeyPair *kp) {
+    /* choose private x in [1, q-1] */
+    kp->x = (uint64_t)(1 + (rand() % (params->q - 1)));
+    kp->y = modexp(params->g, kp->x, params->p);
+}
+
+/* DSA sign: uses provided k (must be in 1..q-1 and invertible mod q).
+   Returns 1 on success, 0 on failure (e.g., r or s == 0) */
+int dsa_sign(const DSAParams *params, const DSAKeyPair *kp, uint64_t k,
+             uint64_t H, uint64_t *out_r, uint64_t *out_s) {
+    uint64_t p = params->p, q = params->q, g = params->g;
+    uint64_t r = modexp(g, k, p) % q;
+    if (r == 0) return 0;
+    uint64_t k_inv = modinv(k, q);
+    if (k_inv == 0) return 0;
+    uint64_t s = (k_inv * ( (H + (kp->x * r) % q ) % q)) % q;
+    if (s == 0) return 0;
+    *out_r = r; *out_s = s;
+    return 1;
+}
+
+/* DSA verify */
+int dsa_verify(const DSAParams *params, const DSAKeyPair *kp, uint64_t H, uint64_t r, uint64_t s) {
+    uint64_t p = params->p, q = params->q, g = params->g, y = kp->y;
+    if (r == 0 || r >= q || s == 0 || s >= q) return 0;
+    uint64_t w = modinv(s, q);
+    if (w == 0) return 0;
+    uint64_t u1 = (H * w) % q;
+    uint64_t u2 = (r * w) % q;
+    uint64_t v = ( (modexp(g, u1, p) * modexp(y, u2, p)) % p ) % q;
+    return v == r;
+}
+
+/* ---------- RSA deterministic signing (textbook) ---------- */
+uint64_t rsa_sign(uint64_t m, uint64_t d, uint64_t n) {
+    return modexp(m, d, n);
+}
+
+/* ---------- Demonstration / main ---------- */
+
+int main(void) {
+    srand((unsigned)time(NULL));
+
+    /* --- Setup toy DSA params (small, for demonstration only) --- */
+    DSAParams params;
+    /* Choose p, q such that q divides p-1.
+       We'll use p = 467 (prime), q = 233 (prime), so p-1 = 466 = 2*233 */
+    params.p = 467;
+    params.q = 233;
+    /* choose h = 2 and compute g = h^{(p-1)/q} mod p = 2^2 mod 467 = 4 */
+    params.g = 4;
+
+    printf("DSA params: p=%" PRIu64 ", q=%" PRIu64 ", g=%" PRIu64 "\n", params.p, params.q, params.g);
+
+    /* Generate key pair */
+    DSAKeyPair kp;
+    dsa_keygen(&params, &kp);
+    printf("DSA keypair: private x=%" PRIu64 ", public y=%" PRIu64 "\n\n", kp.x, kp.y);
+
+    /* Message and its hash (simple hash mod q for demo) */
+    const char *msg = "HELLO";
+    uint64_t H = simple_hash_uint64(msg, params.q); // H in [0,q-1]
+    printf("Message: \"%s\" -> hash H = %" PRIu64 " (mod q)\n\n", msg, H);
+
+    /* --- 1) Sign same message twice with different random k's --- */
+    uint64_t r1, s1, r2, s2;
+    uint64_t k1, k2;
+    do { k1 = 1 + rand() % (params.q - 1); } while (!dsa_sign(&params, &kp, k1, H, &r1, &s1));
+    do { k2 = 1 + rand() % (params.q - 1); } while (k2 == k1 || !dsa_sign(&params, &kp, k2, H, &r2, &s2));
+
+    printf("DSA signature #1 (k=%" PRIu64 "): r=%" PRIu64 ", s=%" PRIu64 "\n", k1, r1, s1);
+    printf("DSA signature #2 (k=%" PRIu64 "): r=%" PRIu64 ", s=%" PRIu64 "\n", k2, r2, s2);
+    printf("Are signatures different? %s\n\n", (r1!=r2 || s1!=s2) ? "Yes" : "No");
+
+    /* Verify both */
+    printf("Verification sig1: %s\n", dsa_verify(&params, &kp, H, r1, s1) ? "OK" : "FAIL");
+    printf("Verification sig2: %s\n\n", dsa_verify(&params, &kp, H, r2, s2) ? "OK" : "FAIL");
+
+    /* --- 2) Danger: reuse same k for two different messages (or same message twice) --- */
+    const char *msgA = "MSG_A";
+    const char *msgB = "MSG_B";
+    uint64_t HA = simple_hash_uint64(msgA, params.q);
+    uint64_t HB = simple_hash_uint64(msgB, params.q);
+
+    /* Force same k */
+    uint64_t reused_k = 1 + rand() % (params.q - 1);
+    uint64_t rA, sA, rB, sB;
+    if (!dsa_sign(&params, &reused_k, reused_k, HA, &rA, &sA)) {
+        /* above call wrong usage; use correct function signature */
+    }
+    /* Correct calls: */
+    dsa_sign(&params, &kp, reused_k, HA, &rA, &sA);
+    dsa_sign(&params, &kp, reused_k, HB, &rB, &sB);
+
+    printf("--- Reuse same k = %" PRIu64 " for two messages ---\n", reused_k);
+    printf("Message A: \"%s\", H_A=%" PRIu64 " -> r_A=%" PRIu64 ", s_A=%" PRIu64 "\n", msgA, HA, rA, sA);
+    printf("Message B: \"%s\", H_B=%" PRIu64 " -> r_B=%" PRIu64 ", s_B=%" PRIu64 "\n\n", msgB, HB, rB, sB);
+
+    /* Attacker recovers k from two signatures with same r (since r = g^k mod p mod q) */
+    if (rA != rB) {
+        printf("Unexpected: r values differ despite same k. Aborting recovery demo.\n");
+    } else {
+        /* compute k = (H_A - H_B) * inv(s_A - s_B) mod q */
+        uint64_t q = params.q;
+        int64_t num = (int64_t)HA - (int64_t)HB;
+        num %= (int64_t)q; if (num < 0) num += q;
+        int64_t den = (int64_t)sA - (int64_t)sB;
+        den %= (int64_t)q; if (den < 0) den += q;
+        uint64_t den_inv = modinv((uint64_t)den, q);
+        if (den_inv == 0) {
+            printf("Cannot invert denominator (sA - sB) mod q. Recovery fails.\n");
+        } else {
+            uint64_t recovered_k = ( (uint64_t)num * den_inv ) % q;
+            printf("Attacker computed k = %" PRIu64 "\n", recovered_k);
+
+            /* Now compute private key x = (s_A * k - H_A) * inv(r_A) mod q */
+            uint64_t r_inv = modinv(rA, q);
+            if (r_inv == 0) {
+                printf("Cannot invert r mod q. Recovery fails.\n");
+            } else {
+                uint64_t x_recovered = ( ( (sA * recovered_k) % q + q - HA % q ) % q * r_inv ) % q;
+                printf("Attacker recovered private x = %" PRIu64 "\n", x_recovered);
+                printf("Actual private x = %" PRIu64 "\n", kp.x);
+                printf("Private key recovery %s\n\n", (x_recovered == kp.x) ? "successful" : "failed");
+            }
+        }
+    }
+
+    /* --- 3) RSA deterministic signature demonstration --- */
+    uint64_t rsa_n = 3599;
+    uint64_t rsa_e = 31;
+    uint64_t rsa_d = 3031; /* from earlier computation */
+    uint64_t m = 1234; /* message as integer (must be < n) */
+
+    uint64_t rsa_sig1 = rsa_sign(m, rsa_d, rsa_n);
+    uint64_t rsa_sig2 = rsa_sign(m, rsa_d, rsa_n);
+
+    printf("RSA deterministic signing (textbook): m=%" PRIu64 "\n", m);
+    printf("Signature 1 = %" PRIu64 "\n", rsa_sig1);
+    printf("Signature 2 = %" PRIu64 "\n", rsa_sig2);
+    printf("Are RSA signatures identical for same m? %s\n", (rsa_sig1 == rsa_sig2) ? "Yes" : "No");
+
+    return 0;
+}
