@@ -1,0 +1,74 @@
+
+
+#include <stdio.h>
+#include <string.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+
+#define BLOCK_SIZE 16 // AES block size
+
+void hex_print(const char *label, unsigned char *data, int len) {
+    printf("%s:", label);
+    for (int i = 0; i < len; i++) printf(" %02X", data[i]);
+    printf("\n");
+}
+
+// Simple helper for AES-128 encryption
+void aes_encrypt(const unsigned char *plaintext, int len, const unsigned char *key,
+                 const unsigned char *iv, unsigned char *ciphertext, const EVP_CIPHER *mode) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    int out_len1, out_len2;
+
+    EVP_EncryptInit_ex(ctx, mode, NULL, key, iv);
+    EVP_EncryptUpdate(ctx, ciphertext, &out_len1, plaintext, len);
+    EVP_EncryptFinal_ex(ctx, ciphertext + out_len1, &out_len2);
+
+    EVP_CIPHER_CTX_free(ctx);
+}
+
+// Simple helper for AES-128 decryption
+void aes_decrypt(const unsigned char *ciphertext, int len, const unsigned char *key,
+                 const unsigned char *iv, unsigned char *plaintext, const EVP_CIPHER *mode) {
+    EVP_CIPHER_CTX *ctx = EVP_CIPHER_CTX_new();
+    int out_len1, out_len2;
+
+    EVP_DecryptInit_ex(ctx, mode, NULL, key, iv);
+    EVP_DecryptUpdate(ctx, plaintext, &out_len1, ciphertext, len);
+    EVP_DecryptFinal_ex(ctx, plaintext + out_len1, &out_len2);
+
+    EVP_CIPHER_CTX_free(ctx);
+}
+
+int main() {
+    unsigned char key[16], iv[16];
+    RAND_bytes(key, sizeof(key));
+    RAND_bytes(iv, sizeof(iv));
+
+    unsigned char plaintext[32] = "This is 32 bytes of plaintext!";
+    unsigned char ciphertext_ecb[32], ciphertext_cbc[32];
+    unsigned char decrypted_ecb[32], decrypted_cbc[32];
+
+    printf("Original Plaintext: %s\n", plaintext);
+
+    // ECB encryption
+    aes_encrypt(plaintext, 32, key, NULL, ciphertext_ecb, EVP_aes_128_ecb());
+    hex_print("ECB Ciphertext", ciphertext_ecb, 32);
+
+    // Introduce an error in block 1 of ECB
+    ciphertext_ecb[1] ^= 0xFF; // flip a bit
+    printf("\nECB with single-bit error in block 1...\n");
+    aes_decrypt(ciphertext_ecb, 32, key, NULL, decrypted_ecb, EVP_aes_128_ecb());
+    hex_print("Decrypted ECB", decrypted_ecb, 32);
+
+    // CBC encryption
+    aes_encrypt(plaintext, 32, key, iv, ciphertext_cbc, EVP_aes_128_cbc());
+    hex_print("\nCBC Ciphertext", ciphertext_cbc, 32);
+
+    // Introduce an error in block 1 of CBC
+    ciphertext_cbc[1] ^= 0xFF;
+    printf("\nCBC with single-bit error in block 1...\n");
+    aes_decrypt(ciphertext_cbc, 32, key, iv, decrypted_cbc, EVP_aes_128_cbc());
+    hex_print("Decrypted CBC", decrypted_cbc, 32);
+
+    return 0;
+}
