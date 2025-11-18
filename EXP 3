@@ -1,0 +1,112 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+
+char keyMatrix[5][5];
+
+// Function to generate the Playfair key matrix
+void generateKeyMatrix(char *key) {
+    int freq[26] = {0};
+    int row = 0, col = 0;
+    char ch;
+
+    // Normalize key to uppercase
+    for (int i = 0; key[i]; i++) {
+        ch = toupper(key[i]);
+        if (ch == 'J') ch = 'I'; // Treat I and J as the same
+        if (ch < 'A' || ch > 'Z') continue; // Skip non-letters
+        if (!freq[ch - 'A']) {
+            keyMatrix[row][col] = ch;
+            freq[ch - 'A'] = 1;
+            col++;
+            if (col == 5) { col = 0; row++; }
+        }
+    }
+
+    // Fill the rest of the matrix with remaining letters
+    for (char c = 'A'; c <= 'Z'; c++) {
+        if (c == 'J') continue;
+        if (!freq[c - 'A']) {
+            keyMatrix[row][col] = c;
+            col++;
+            if (col == 5) { col = 0; row++; }
+        }
+    }
+}
+
+// Function to format the plaintext
+void formatPlaintext(char *input, char *output) {
+    int len = 0;
+    for (int i = 0; input[i]; i++) {
+        char ch = toupper(input[i]);
+        if (ch >= 'A' && ch <= 'Z') {
+            if (ch == 'J') ch = 'I'; // Treat J as I
+            if (len > 0 && output[len - 1] == ch) {
+                output[len++] = 'X'; // Insert X between duplicate letters
+            }
+            output[len++] = ch;
+        }
+    }
+    if (len % 2 != 0) output[len++] = 'X'; // Pad if odd length
+    output[len] = '\0';
+}
+
+// Function to find the position of a character in the key matrix
+void findPosition(char ch, int *row, int *col) {
+    for (int i = 0; i < 5; i++)
+        for (int j = 0; j < 5; j++)
+            if (keyMatrix[i][j] == ch) {
+                *row = i;
+                *col = j;
+                return;
+            }
+}
+
+// Encryption function
+void encrypt(char *plaintext, char *ciphertext) {
+    int len = strlen(plaintext);
+    for (int i = 0; i < len; i += 2) {
+        int r1, c1, r2, c2;
+        findPosition(plaintext[i], &r1, &c1);
+        findPosition(plaintext[i+1], &r2, &c2);
+
+        if (r1 == r2) { // Same row
+            ciphertext[i] = keyMatrix[r1][(c1 + 1) % 5];
+            ciphertext[i+1] = keyMatrix[r2][(c2 + 1) % 5];
+        } else if (c1 == c2) { // Same column
+            ciphertext[i] = keyMatrix[(r1 + 1) % 5][c1];
+            ciphertext[i+1] = keyMatrix[(r2 + 1) % 5][c2];
+        } else { // Rectangle rule
+            ciphertext[i] = keyMatrix[r1][c2];
+            ciphertext[i+1] = keyMatrix[r2][c1];
+        }
+    }
+    ciphertext[len] = '\0';
+}
+
+int main() {
+    char key[100], plaintext[100], formattedText[200], ciphertext[200];
+
+    printf("Enter keyword: ");
+    fgets(key, sizeof(key), stdin);
+
+    printf("Enter plaintext: ");
+    fgets(plaintext, sizeof(plaintext), stdin);
+
+    generateKeyMatrix(key);
+
+    printf("\nKey Matrix:\n");
+    for (int i = 0; i < 5; i++) {
+        for (int j = 0; j < 5; j++)
+            printf("%c ", keyMatrix[i][j]);
+        printf("\n");
+    }
+
+    formatPlaintext(plaintext, formattedText);
+    encrypt(formattedText, ciphertext);
+
+    printf("\nFormatted Plaintext: %s\n", formattedText);
+    printf("Ciphertext: %s\n", ciphertext);
+
+    return 0;
+}
