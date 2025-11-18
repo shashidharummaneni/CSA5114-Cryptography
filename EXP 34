@@ -1,0 +1,45 @@
+#include <stdio.h>
+#include <string.h>
+
+#define BLOCK_SIZE 8
+
+void pad_message(const unsigned char *input, int input_len, unsigned char *output, int *output_len) {
+    int pad_len = BLOCK_SIZE - (input_len % BLOCK_SIZE);
+    
+    // Always append padding block even if the length is already aligned
+    if (pad_len == 0) {
+        pad_len = BLOCK_SIZE;
+    }
+    
+    memcpy(output, input, input_len);
+    output[input_len] = 0x80; // 10000000 in binary (1-bit followed by zeros)
+    
+    for (int i = 1; i < pad_len; i++) {
+        output[input_len + i] = 0x00;
+    }
+    
+    *output_len = input_len + pad_len;
+}
+
+void print_hex(const unsigned char *data, int len) {
+    for(int i = 0; i < len; i++) {
+        printf("%02X ", data[i]);
+        if ((i + 1) % BLOCK_SIZE == 0) printf("\n");
+    }
+}
+
+int main() {
+    unsigned char message[] = "HelloWorld!"; // 11 bytes
+    int msg_len = strlen((char*)message);
+    
+    unsigned char padded[256];
+    int padded_len = 0;
+    
+    pad_message(message, msg_len, padded, &padded_len);
+    
+    printf("Original Message (%d bytes): %s\n", msg_len, message);
+    printf("Padded Message (%d bytes):\n", padded_len);
+    print_hex(padded, padded_len);
+    
+    return 0;
+}
