@@ -1,0 +1,72 @@
+#include <stdio.h>
+#include <stdint.h>
+
+// Define 56-bit initial key (stored in 64-bit space for simplicity)
+uint64_t initialKey = 0x133457799BBCDFF1; // Example key
+
+// Left shifts per round
+int shifts[16] = {1, 1, 2, 2, 2, 2, 2, 2, 1, 2, 2, 2, 2, 2, 2, 1};
+
+// Permuted Choice 1 (PC1) to drop parity bits and map 64 bits to 56 bits
+int PC1[56] = {
+    57, 49, 41, 33, 25, 17,  9,
+     1, 58, 50, 42, 34, 26, 18,
+    10,  2, 59, 51, 43, 35, 27,
+    19, 11,  3, 60, 52, 44, 36,
+    63, 55, 47, 39, 31, 23, 15,
+     7, 62, 54, 46, 38, 30, 22,
+    14,  6, 61, 53, 45, 37, 29,
+    21, 13,  5, 28, 20, 12,  4
+};
+
+// PC2: Maps 56 bits to a 48-bit subkey
+int PC2[48] = {
+    14, 17, 11, 24,  1,  5,
+     3, 28, 15,  6, 21, 10,
+    23, 19, 12,  4, 26,  8,
+    16,  7, 27, 20, 13,  2,
+    41, 52, 31, 37, 47, 55,
+    30, 40, 51, 45, 33, 48,
+    44, 49, 39, 56, 34, 53,
+    46, 42, 50, 36, 29, 32
+};
+
+uint64_t permute(uint64_t input, int *table, int tableSize, int inputSize) {
+    uint64_t output = 0;
+    for (int i = 0; i < tableSize; i++) {
+        output <<= 1;
+        output |= (input >> (inputSize - table[i])) & 1;
+    }
+    return output;
+}
+
+uint32_t leftRotate28(uint32_t x, int shifts) {
+    return ((x << shifts) | (x >> (28 - shifts))) & 0x0FFFFFFF;
+}
+
+int main() {
+    uint64_t key56 = permute(initialKey, PC1, 56, 64);
+
+    uint32_t C = (key56 >> 28) & 0x0FFFFFFF;
+    uint32_t D = key56 & 0x0FFFFFFF;
+
+    printf("Initial key halves:\n");
+    printf("C0: %07X\n", C);
+    printf("D0: %07X\n\n", D);
+
+    for (int round = 0; round < 16; round++) {
+        C = leftRotate28(C, shifts[round]);
+        D = leftRotate28(D, shifts[round]);
+
+        // Combine first 24 bits of C and 24 bits of D
+        uint64_t subkey48 = ((uint64_t)(C >> 4) << 24) | ((D >> 4) & 0xFFFFFF);
+
+        // Alternatively, use full PC2 if desired:
+        uint64_t fullSubkey = permute(((uint64_t)C << 28) | D, PC2, 48, 56);
+
+        printf("Round %2d Subkey (24 bits C + 24 bits D): %012llX\n", round + 1, subkey48);
+        printf("Round %2d Standard DES subkey (with PC2): %012llX\n\n", round + 1, fullSubkey);
+    }
+
+    return 0;
+}
