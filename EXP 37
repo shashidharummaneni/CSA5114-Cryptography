@@ -1,0 +1,79 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+
+#define MAX_TEXT 10000
+#define ALPHABET_SIZE 26
+
+// English letter frequency order (most common to least common)
+const char *english_freq = "ETAOINSHRDLCUMWFGYPBVKJXQZ";
+
+// Function to calculate letter frequencies
+void calculate_frequency(const char *text, int freq[]) {
+    memset(freq, 0, ALPHABET_SIZE * sizeof(int));
+    for (int i = 0; text[i]; i++) {
+        char c = toupper(text[i]);
+        if (c >= 'A' && c <= 'Z') {
+            freq[c - 'A']++;
+        }
+    }
+}
+
+// Create a mapping from ciphertext to plaintext based on frequency
+void create_mapping(int freq[], char mapping[]) {
+    int sorted_idx[ALPHABET_SIZE];
+
+    // Initialize index array
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        sorted_idx[i] = i;
+    }
+
+    // Sort indices by frequency
+    for (int i = 0; i < ALPHABET_SIZE - 1; i++) {
+        for (int j = i + 1; j < ALPHABET_SIZE; j++) {
+            if (freq[sorted_idx[j]] > freq[sorted_idx[i]]) {
+                int temp = sorted_idx[i];
+                sorted_idx[i] = sorted_idx[j];
+                sorted_idx[j] = temp;
+            }
+        }
+    }
+
+    // Create mapping
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        mapping[sorted_idx[i]] = english_freq[i];
+    }
+}
+
+// Apply mapping to ciphertext
+void apply_mapping(const char *ciphertext, char *plaintext, char mapping[]) {
+    for (int i = 0; ciphertext[i]; i++) {
+        char c = ciphertext[i];
+        if (isalpha(c)) {
+            char upper = toupper(c);
+            plaintext[i] = islower(c) ? tolower(mapping[upper - 'A']) : mapping[upper - 'A'];
+        } else {
+            plaintext[i] = c;
+        }
+    }
+}
+
+int main() {
+    char ciphertext[MAX_TEXT];
+    char plaintext[MAX_TEXT];
+    int freq[ALPHABET_SIZE];
+    char mapping[ALPHABET_SIZE];
+
+    printf("Enter ciphertext:\n");
+    fgets(ciphertext, MAX_TEXT, stdin);
+
+    calculate_frequency(ciphertext, freq);
+    create_mapping(freq, mapping);
+
+    printf("\nFrequency-based Decryption Attempt:\n");
+    apply_mapping(ciphertext, plaintext, mapping);
+    printf("%s\n", plaintext);
+
+    return 0;
+}
