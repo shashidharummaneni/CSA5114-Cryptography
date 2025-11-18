@@ -1,0 +1,68 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
+#define MAX 100
+
+// Function to generate a key stream of random numbers (0-25)
+void generate_key_stream(int *key_stream, int len) {
+    srand(time(NULL));
+    for (int i = 0; i < len; i++) {
+        key_stream[i] = rand() % 26;
+    }
+}
+
+void encrypt(const char *plaintext, char *ciphertext, int *key_stream) {
+    int len = strlen(plaintext);
+    for (int i = 0; i < len; i++) {
+        if (plaintext[i] >= 'A' && plaintext[i] <= 'Z') {
+            ciphertext[i] = ((plaintext[i] - 'A') + key_stream[i]) % 26 + 'A';
+        } else {
+            ciphertext[i] = plaintext[i]; // Non-alpha characters stay the same
+        }
+    }
+    ciphertext[len] = '\0';
+}
+
+void decrypt(const char *ciphertext, char *decrypted, int *key_stream) {
+    int len = strlen(ciphertext);
+    for (int i = 0; i < len; i++) {
+        if (ciphertext[i] >= 'A' && ciphertext[i] <= 'Z') {
+            decrypted[i] = ((ciphertext[i] - 'A') - key_stream[i] + 26) % 26 + 'A';
+        } else {
+            decrypted[i] = ciphertext[i];
+        }
+    }
+    decrypted[len] = '\0';
+}
+
+int main() {
+    char plaintext[MAX], ciphertext[MAX], decrypted_text[MAX];
+    int key_stream[MAX];
+
+    printf("Enter plaintext (A-Z only): ");
+    fgets(plaintext, MAX, stdin);
+
+    // Remove newline character if present
+    plaintext[strcspn(plaintext, "\n")] = 0;
+
+    int len = strlen(plaintext);
+
+    // Generate random key stream
+    generate_key_stream(key_stream, len);
+
+    encrypt(plaintext, ciphertext, key_stream);
+    decrypt(ciphertext, decrypted_text, key_stream);
+
+    printf("\nGenerated Key Stream: ");
+    for (int i = 0; i < len; i++) {
+        printf("%d ", key_stream[i]);
+    }
+    printf("\n");
+
+    printf("Encrypted Text: %s\n", ciphertext);
+    printf("Decrypted Text: %s\n", decrypted_text);
+
+    return 0;
+}
