@@ -1,0 +1,75 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+
+#define ALPHABET_SIZE 26
+
+void generateCipher(char key[], char cipher[]) {
+    int used[ALPHABET_SIZE] = {0};
+    int cipherIndex = 0;
+
+    // Add the keyword to the cipher
+    for (int i = 0; key[i] != '\0'; i++) {
+        if (isalpha(key[i])) {
+            char upper = toupper(key[i]);
+            if (!used[upper - 'A']) {
+                cipher[cipherIndex++] = upper;
+                used[upper - 'A'] = 1;
+            }
+        }
+    }
+
+    // Add the rest of the alphabet
+    for (char letter = 'A'; letter <= 'Z'; letter++) {
+        if (!used[letter - 'A']) {
+            cipher[cipherIndex++] = letter;
+        }
+    }
+
+    cipher[cipherIndex] = '\0'; // null-terminate
+}
+
+void encrypt(char plaintext[], char cipher[]) {
+    char alphabet[ALPHABET_SIZE];
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        alphabet[i] = 'A' + i;
+    }
+
+    printf("\nEncrypted Text: ");
+    for (int i = 0; plaintext[i] != '\0'; i++) {
+        if (isalpha(plaintext[i])) {
+            char upper = toupper(plaintext[i]);
+            int index = upper - 'A';
+            printf("%c", cipher[index]);
+        } else {
+            printf("%c", plaintext[i]);
+        }
+    }
+}
+
+int main() {
+    char key[100], plaintext[1000], cipher[ALPHABET_SIZE + 1];
+
+    printf("Enter the keyword: ");
+    scanf("%s", key);
+
+    printf("Enter the plaintext: ");
+    getchar();  // clear newline
+    fgets(plaintext, sizeof(plaintext), stdin);
+
+    generateCipher(key, cipher);
+
+    printf("\nCipher Alphabet:\n");
+    printf("Plain:  ");
+
+    for (char c = 'A'; c <= 'Z'; c++)
+        printf("%c ", c);
+    printf("\nCipher: ");
+
+    for (int i = 0; i < ALPHABET_SIZE; i++)
+        printf("%c ", cipher[i]);
+
+    encrypt(plaintext, cipher);
+
+    return 0;
+}
