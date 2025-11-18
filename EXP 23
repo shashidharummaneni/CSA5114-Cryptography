@@ -1,0 +1,124 @@
+#include <stdio.h>
+#include <stdint.h>
+
+// Permutation tables
+int P10[] = {3, 5, 2, 7, 4, 10, 1, 9, 8, 6};
+int P8[] = {6, 3, 7, 4, 8, 5, 10, 9};
+int P4[] = {2, 4, 3, 1};
+int IP[] = {2, 6, 3, 1, 4, 8, 5, 7};
+int IP_inv[] = {4, 1, 3, 5, 7, 2, 8, 6};
+int EP[] = {4, 1, 2, 3, 2, 3, 4, 1};
+
+// S-boxes
+int S0[4][4] = {
+    {1, 0, 3, 2},
+    {3, 2, 1, 0},
+    {0, 2, 1, 3},
+    {3, 1, 3, 2}};
+int S1[4][4] = {
+    {0, 1, 2, 3},
+    {2, 0, 1, 3},
+    {3, 0, 1, 0},
+    {2, 1, 0, 3}};
+
+// Utility function to get bit at position
+int get_bit(int num, int pos) {
+    return (num >> (8 - pos)) & 1;
+}
+
+int left_shift(int num, int shifts) {
+    return ((num << shifts) | (num >> (5 - shifts))) & 0x1F;
+}
+
+// Permutation function
+int permute(int input, int* p, int n) {
+    int output = 0;
+    for (int i = 0; i < n; i++) {
+        output <<= 1;
+        output |= get_bit(input, p[i]);
+    }
+    return output;
+}
+
+// Key generation: Creates K1 and K2
+void generate_keys(int key, int* K1, int* K2) {
+    int permuted = permute(key, P10, 10);
+    int left = (permuted >> 5) & 0x1F;
+    int right = permuted & 0x1F;
+
+    left = left_shift(left, 1);
+    right = left_shift(right, 1);
+    *K1 = permute((left << 5) | right, P8, 8);
+
+    left = left_shift(left, 2);
+    right = left_shift(right, 2);
+    *K2 = permute((left << 5) | right, P8, 8);
+}
+
+// F-function in S-DES
+int f(int right, int subkey) {
+    int expanded = permute(right, EP, 8);
+    int temp = expanded ^ subkey;
+
+    int left = (temp >> 4) & 0xF;
+    int right2 = temp & 0xF;
+
+    int row = ((left & 0x8) >> 2) | (left & 1);
+    int col = (left >> 1) & 0x3;
+    int s0 = S0[row][col];
+
+    row = ((right2 & 0x8) >> 2) | (right2 & 1);
+    col = (right2 >> 1) & 0x3;
+    int s1 = S1[row][col];
+
+    int output = (s0 << 2) | s1;
+    return permute(output, P4, 4);
+}
+
+// S-DES Encryption for one block
+int sdes_encrypt_block(int input, int K1, int K2) {
+    int temp = permute(input, IP, 8);
+    int left = (temp >> 4) & 0xF;
+    int right = temp & 0xF;
+
+    int result = left ^ f(right, K1);
+
+    left = right;
+    right = result;
+
+    result = (left << 4) | right;
+    result = permute(result, IP_inv, 8);
+
+    return result;
+}
+
+// CTR mode encryption and decryption are the same
+void ctr_crypt(uint8_t* input, uint8_t* output, int blocks, int K1, int K2, uint8_t initial_counter) {
+    uint8_t counter = initial_counter;
+    for (int i = 0; i < blocks; i++) {
+        uint8_t keystream = sdes_encrypt_block(counter, K1, K2);
+        output[i] = input[i] ^ keystream;
+        counter++; // Increment counter
+    }
+}
+
+int main() {
+    // Test data
+    uint8_t plaintext[3] = {0x01, 0x02, 0x04}; // 00000001 00000010 00000100
+    uint8_t ciphertext[3], decrypted[3];
+    uint8_t counter_start = 0x00;
+    int K1, K2;
+    int key = 0x1FD; // 0111111101
+
+    generate_keys(key, &K1, &K2);
+
+    // CTR Encryption
+    ctr_crypt(plaintext, ciphertext, 3, K1, K2, counter_start);
+    printf("Ciphertext: %02X %02X %02X\n", ciphertext[0], ciphertext[1], ciphertext[2]);
+
+    // CTR Decryption (same function)
+    ctr_crypt(ciphertext, decrypted, 3, K1, K2, counter_start);
+    printf("Decrypted: %02X %02X %02X\n", decrypted[0], decrypted[1], decrypted[2]);
+
+    return 0;
+}
