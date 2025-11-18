@@ -1,51 +1,33 @@
 #include <stdio.h>
 #include <string.h>
 
-char substitute(char symbol) {
-    // This mapping was derived from Poe's cipher solution
-    switch (symbol) {
-        case '5': return 'A';
-        case '3': return 'G';
-        case '‡': return 'O';
-        case '†': return 'D';
-        case '3': return 'G';
-        case '0': return 'L';
-        case '5': return 'A';
-        case ')': return 'S';
-        case '6': return 'I';
-        case '*': return 'N';
-        case ';': return 'H';
-        case '4': return 'T';
-        case '8': return 'E';
-        case '.': return 'R';
-        case '(': return 'M';
-        case '9': return 'F';
-        case '¶': return 'V';
-        case ']': return 'Y';
-        case ':': return 'B';
-        case '?': return 'C';
-        case '2': return 'K';
-        case '—': return 'W';
-        case '1': return 'U';
-        case ',': return ',';
-        case ' ': return ' ';
-        default: return symbol; // Pass through unrecognized symbols
-    }
-}
+#define MAX_LEN 1000
 
 int main() {
-    const char *ciphertext =
-        "53‡‡†305))6*;4826)4‡.)4‡);806*;48†8¶60))85;;]8*;:‡*8†83"
-        "(88)5*†;46(;88*96*?;8)*‡(;485);5*†2:*‡(;4956*2(5*—4)8¶8*"
-        ";4069285);)6†8)4‡‡;1(‡9;48081;8:8‡1;48†85;4)485†528806*81 (‡9;48;(88;4(‡?34;48)4‡;161;:188;‡?;";
+    char ciphertext[] =
+    "53‡‡†305))6*;4826)4‡.)4‡);806*;48†8¶60))85;;]8*;:‡*8†83\n"
+    "(88)5*†;46(;88*96*?;8)*‡(;485);5*†2:*‡(;4956*2(5*—4)8¶8*\n"
+    ";4069285);)6†8)4‡‡;1(‡9;48081;8:8‡1;48†85;4)485†528806*81 (‡9;48;(88;4(‡?34;48)4‡;161;:188;‡?;";
 
-    char plaintext[1000];
-    for (int i = 0; ciphertext[i] != '\0'; i++) {
-        plaintext[i] = substitute(ciphertext[i]);
+    int count[256] = {0};
+    int len = strlen(ciphertext);
+
+    // Count frequencies
+    for (int i = 0; i < len; i++) {
+        unsigned char c = ciphertext[i];
+        if (c >= 32 && c <= 126) {
+            count[c]++;
+        }
     }
-    plaintext[strlen(ciphertext)] = '\0';
 
-    printf("Decrypted Plaintext:\n%s\n", plaintext);
+    // Display results
+    printf("Frequency of symbols:\n");
+    for (int i = 32; i < 127; i++) {
+        if (count[i] != 0) {
+            printf("%c: %d\n", i, count[i]);
+        }
+    }
+
     return 0;
 }
 
