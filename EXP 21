@@ -1,0 +1,117 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+
+#define BLOCK_SIZE 8  // Block size in bytes (64 bits)
+#define MAX_DATA_SIZE 256
+
+// Simple XOR block cipher function (placeholder for real block cipher)
+void block_encrypt(uint8_t *plaintext_block, uint8_t *key, uint8_t *ciphertext_block) {
+    for (int i = 0; i < BLOCK_SIZE; i++) {
+        ciphertext_block[i] = plaintext_block[i] ^ key[i];
+    }
+}
+
+// Simple XOR block cipher decrypt (same as encrypt here)
+void block_decrypt(uint8_t *ciphertext_block, uint8_t *key, uint8_t *plaintext_block) {
+    block_encrypt(ciphertext_block, key, plaintext_block);
+}
+
+// Padding: append '1' bit followed by 0 bits to fill block
+// For simplicity, here padding is done byte-wise: first pad byte is 0x80 (binary 10000000), rest 0x00
+void pad(uint8_t *data, int data_len, int *padded_len) {
+    int remainder = data_len % BLOCK_SIZE;
+    int pad_len = (remainder == 0) ? BLOCK_SIZE : (BLOCK_SIZE - remainder);
+
+    data[data_len] = 0x80; // 1 bit followed by 7 zero bits
+    for (int i = 1; i < pad_len; i++) {
+        data[data_len + i] = 0x00;
+    }
+    *padded_len = data_len + pad_len;
+}
+
+// ECB mode encryption
+void ecb_encrypt(uint8_t *plaintext, int len, uint8_t *key, uint8_t *ciphertext) {
+    for (int i = 0; i < len; i += BLOCK_SIZE) {
+        block_encrypt(plaintext + i, key, ciphertext + i);
+    }
+}
+
+// CBC mode encryption
+void cbc_encrypt(uint8_t *plaintext, int len, uint8_t *key, uint8_t *iv, uint8_t *ciphertext) {
+    uint8_t temp_block[BLOCK_SIZE];
+    memcpy(temp_block, iv, BLOCK_SIZE);
+
+    for (int i = 0; i < len; i += BLOCK_SIZE) {
+        for (int j = 0; j < BLOCK_SIZE; j++) {
+            temp_block[j] ^= plaintext[i + j];
+        }
+        block_encrypt(temp_block, key, ciphertext + i);
+        memcpy(temp_block, ciphertext + i, BLOCK_SIZE);
+    }
+}
+
+// CFB mode encryption (segment size = 1 byte)
+void cfb_encrypt(uint8_t *plaintext, int len, uint8_t *key, uint8_t *iv, uint8_t *ciphertext) {
+    uint8_t shift_register[BLOCK_SIZE];
+    memcpy(shift_register, iv, BLOCK_SIZE);
+
+    for (int i = 0; i < len; i++) {
+        uint8_t output_block[BLOCK_SIZE];
+        block_encrypt(shift_register, key, output_block);
+        ciphertext[i] = plaintext[i] ^ output_block[0];
+
+        // Shift left 1 byte and append ciphertext byte
+        memmove(shift_register, shift_register + 1, BLOCK_SIZE - 1);
+        shift_register[BLOCK_SIZE - 1] = ciphertext[i];
+    }
+}
+
+// Helper function: print data in hex
+void print_hex(const char *label, uint8_t *data, int len) {
+    printf("%s:", label);
+    for (int i = 0; i < len; i++) {
+        if (i % BLOCK_SIZE == 0) printf("\n");
+        printf("%02X ", data[i]);
+    }
+    printf("\n");
+}
+
+int main() {
+    // Example key and IV (8 bytes)
+    uint8_t key[BLOCK_SIZE] = {0x1A, 0x2B, 0x3C, 0x4D, 0x5E, 0x6F, 0x70, 0x81};
+    uint8_t iv[BLOCK_SIZE] =  {0xA1, 0xB2, 0xC3, 0xD4, 0xE5, 0xF6, 0x07, 0x18};
+
+    // Example plaintext: "HELLO ECB MODE!" -- 15 bytes
+    uint8_t plaintext[MAX_DATA_SIZE] = "HELLO ECB MODE!";
+    int plaintext_len = strlen((char *)plaintext);
+
+    // Pad plaintext (the pad function modifies data in place)
+    int padded_len = 0;
+    pad(plaintext, plaintext_len, &padded_len);
+
+    uint8_t ciphertext[MAX_DATA_SIZE] = {0};
+    uint8_t decrypted[MAX_DATA_SIZE] = {0};
+
+    printf("Original plaintext: %s\n", plaintext);
+
+    // ECB
+    ecb_encrypt(plaintext, padded_len, key, ciphertext);
+    print_hex("ECB Encrypted", ciphertext, padded_len);
+
+    // CBC
+    cbc_encrypt(plaintext, padded_len, key, iv, ciphertext);
+    print_hex("CBC Encrypted", ciphertext, padded_len);
+
+    // CFB (segment size 1 byte)
+    cfb_encrypt(plaintext, padded_len, key, iv, ciphertext);
+    print_hex("CFB Encrypted", ciphertext, padded_len);
+
+    // Motivation for padding block when padding is not needed:
+    printf("\nMotivation for padding always:\n"
+           "- Prevents an attacker from learning plaintext length exactly.\n"
+           "- Protects against leakage of message length info or message structure.\n"
+           "- Avoids distinguishing messages with/without padding.\n");
+
+    return 0;
+}
