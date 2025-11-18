@@ -1,0 +1,93 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <stdint.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+
+static void hex_print(const char *label, const unsigned char *data, int len) {
+    printf("%s (%d bytes): ", label, len);
+    for (int i = 0; i < len; ++i) printf("%02X", data[i]);
+    printf("\n");
+}
+
+int encrypt_3des_cbc(
+    const unsigned char *plaintext, int plaintext_len,
+    const unsigned char *key,            /* 24 bytes for 3DES (DES-EDE3) */
+    const unsigned char *iv,             /* 8 bytes */
+    unsigned char **ciphertext, int *ciphertext_len)
+{
+    EVP_CIPHER_CTX *ctx = NULL;
+    int len = 0;
+    int c_len = 0;
+    int final_len = 0;
+    int ret = -1;
+
+    /* Create and initialise the context */
+    ctx = EVP_CIPHER_CTX_new();
+    if (!ctx) goto done;
+
+    /* Initialize encryption operation with 3DES CBC */
+    if (1 != EVP_EncryptInit_ex(ctx, EVP_des_ede3_cbc(), NULL, key, iv))
+        goto done;
+
+    /* Allocate ciphertext buffer: plaintext_len + block_size (for PKCS#7) */
+    int block_size = EVP_CIPHER_CTX_block_size(ctx);
+    *ciphertext = (unsigned char *)malloc(plaintext_len + block_size);
+    if (!*ciphertext) goto done;
+
+    /* Encrypt update */
+    if (1 != EVP_EncryptUpdate(ctx, *ciphertext, &len, plaintext, plaintext_len))
+        goto done;
+    c_len = len;
+
+    /* Finalize (handles padding) */
+    if (1 != EVP_EncryptFinal_ex(ctx, *ciphertext + c_len, &len))
+        goto done;
+    final_len = len;
+
+    *ciphertext_len = c_len + final_len;
+    ret = 0; /* success */
+
+done:
+    if (ret != 0 && *ciphertext) { free(*ciphertext); *ciphertext = NULL; }
+    if (ctx) EVP_CIPHER_CTX_free(ctx);
+    return ret;
+}
+
+int main(void) {
+    /* Example plaintext */
+    const char *plain = "Example plaintext message for 3DES-CBC encryption. "
+                        "This text will be padded to an 8-byte boundary.";
+
+    unsigned char key[24]; /* 3 x DES keys (24 bytes) */
+    unsigned char iv[8];   /* DES block size = 8 bytes */
+
+    /* Generate random key and IV. In real use: securely store/derive key. */
+    if (1 != RAND_bytes(key, sizeof(key))) {
+        fprintf(stderr, "RAND_bytes for key failed\n");
+        return 1;
+    }
+    if (1 != RAND_bytes(iv, sizeof(iv))) {
+        fprintf(stderr, "RAND_bytes for iv failed\n");
+        return 1;
+    }
+
+    unsigned char *ciphertext = NULL;
+    int ciphertext_len = 0;
+    int plaintext_len = (int)strlen(plain);
+
+    if (0 != encrypt_3des_cbc((const unsigned char*)plain, plaintext_len, key, iv, &ciphertext, &ciphertext_len)) {
+        fprintf(stderr, "Encryption failed\n");
+        return 1;
+    }
+
+    /* Print results */
+    hex_print("3DES key", key, sizeof(key));
+    hex_print("IV", iv, sizeof(iv));
+    printf("Plaintext (%d bytes): %s\n", plaintext_len, plain);
+    hex_print("Ciphertext", ciphertext, ciphertext_len);
+
+    free(ciphertext);
+    return 0;
+}
