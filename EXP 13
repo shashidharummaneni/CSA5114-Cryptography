@@ -1,29 +1,41 @@
 /* hill_known_plaintext.c
-   Recover 2x2 Hill key from plaintext-ciphertext pairs.
-   Compile: gcc hill_known_plaintext.c -o hill_known_plaintext -lm
-   Usage: ./hill_known_plaintext
+   Recover 2x2 Hill key from two plaintext-ciphertext digraph pairs.
+
+   Compile:
+     gcc hill_known_plaintext.c -o hill_known_plaintext
+
+   Usage:
+     ./hill_known_plaintext
 */
 #include <stdio.h>
 #include <stdlib.h>
+#include <ctype.h>
 
-int mod26(int x){ x%=26; if (x<0) x+=26; return x; }
+int mod26(int x) { x %= 26; if (x < 0) x += 26; return x; }
 
-int egcd(int a,int b,int *x,int *y){
-    if(b==0){ *x=1; *y=0; return a; }
-    int x1,y1; int g=egcd(b,a%b,&x1,&y1);
-    *x=y1; *y=x1 - (a/b)*y1;
+/* Extended gcd: returns gcd(a,b) and sets x,y such that a*x + b*y = gcd */
+int egcd(int a, int b, int *x, int *y){
+    if (b == 0) { *x = 1; *y = 0; return a; }
+    int x1, y1;
+    int g = egcd(b, a % b, &x1, &y1);
+    *x = y1;
+    *y = x1 - (a / b) * y1;
     return g;
 }
-int modinv(int a,int m){
-    int x,y; int g = egcd(a,m,&x,&y);
-    if (g!=1) return -1;
-    x%=m; if (x<0) x+=m; return x;
+
+/* Modular inverse of a mod m (returns -1 if no inverse) */
+int modinv(int a, int m){
+    int x, y;
+    int g = egcd(a, m, &x, &y);
+    if (g != 1) return -1;
+    x %= m; if (x < 0) x += m;
+    return x;
 }
 
 /* Inverse of 2x2 matrix A (mod 26). Returns 0 on success, -1 if non-invertible */
 int inv2x2(int A[2][2], int Inv[2][2]){
     int det = mod26(A[0][0]*A[1][1] - A[0][1]*A[1][0]);
-    int idet = modinv(det,26);
+    int idet = modinv(det, 26);
     if (idet == -1) return -1;
     Inv[0][0] = mod26(idet * A[1][1]);
     Inv[0][1] = mod26(idet * (-A[0][1]));
@@ -32,36 +44,66 @@ int inv2x2(int A[2][2], int Inv[2][2]){
     return 0;
 }
 
+/* Multiply 2x2 matrices C = A * B (mod 26) */
 void mult2x2(int A[2][2], int B[2][2], int C[2][2]){
-    for(int i=0;i<2;i++) for(int j=0;j<2;j++){
-        C[i][j] = mod26(A[i][0]*B[0][j] + A[i][1]*B[1][j]);
+    for (int i = 0; i < 2; i++) {
+        for (int j = 0; j < 2; j++) {
+            C[i][j] = mod26(A[i][0]*B[0][j] + A[i][1]*B[1][j]);
+        }
     }
 }
 
-int main(){
+int main(void){
     printf("Recover 2x2 Hill key from two plaintext-ciphertext digraph pairs.\n");
-    printf("Enter plaintext pairs (4 letters) e.g. m e a t  -> me at -> mee t ???\n");
-    printf("We'll read two digraphs (4 letters total) and their ciphertext digraphs.\n");
-    char p[5], c[5];
-    printf("Enter 4 plaintext letters (no spaces) e.g. 'meet': ");
-    if (scanf("%4s", p)!=1) return 0;
-    printf("Enter 4 ciphertext letters (no spaces) e.g. 'ukix': ");
-    if (scanf("%4s", c)!=1) return 0;
-    for(int i=0;i<4;i++){ p[i]=tolower(p[i]); c[i]=tolower(c[i]); }
-    int P[2][2], C[2][2];
-    // columns are digraphs: P = [p0 p1], where p0 = first pair, p1 = second pair
-    P[0][0] = p[0]-'a'; P[1][0] = p[1]-'a';
-    P[0][1] = p[2]-'a'; P[1][1] = p[3]-'a';
-    C[0][0] = c[0]-'a'; C[1][0] = c[1]-'a';
-    C[0][1] = c[2]-'a'; C[1][1] = c[3]-'a';
-    int Pinv[2][2];
-    if (inv2x2(P,Pinv)==-1){
-        printf("Plaintext matrix is non-invertible mod26. Choose different pairs.\n");
-        return 0;
+    printf("You will enter two plaintext digraphs (4 letters total) and their corresponding\n");
+    printf("ciphertext digraphs (also 4 letters total).\n\n");
+
+    char p[5] = {0}, c[5] = {0};
+
+    printf("Enter 4 plaintext letters (e.g. meet): ");
+    if (scanf("%4s", p) != 1) {
+        fprintf(stderr, "Input error.\n");
+        return 1;
     }
+    printf("Enter 4 ciphertext letters (e.g. ukix): ");
+    if (scanf("%4s", c) != 1) {
+        fprintf(stderr, "Input error.\n");
+        return 1;
+    }
+
+    /* validate and normalize */
+    for (int i = 0; i < 4; i++) {
+        if (!isalpha((unsigned char)p[i]) || !isalpha((unsigned char)c[i])) {
+            fprintf(stderr, "Error: all 8 characters must be alphabetic letters (A-Z).\n");
+            return 1;
+        }
+        p[i] = (char)tolower((unsigned char)p[i]);
+        c[i] = (char)tolower((unsigned char)c[i]);
+    }
+
+    int P[2][2], C[2][2];
+    /* arrange columns as digraphs: P = [p0 p1], where p0 = (p0,p1), p1 = (p2,p3) */
+    P[0][0] = p[0] - 'a'; P[1][0] = p[1] - 'a';
+    P[0][1] = p[2] - 'a'; P[1][1] = p[3] - 'a';
+
+    C[0][0] = c[0] - 'a'; C[1][0] = c[1] - 'a';
+    C[0][1] = c[2] - 'a'; C[1][1] = c[3] - 'a';
+
+    int Pinv[2][2];
+    if (inv2x2(P, Pinv) == -1) {
+        printf("Plaintext matrix is non-invertible modulo 26.\n");
+        printf("Choose different plaintext digraphs (they must form an invertible 2x2 matrix mod 26).\n");
+        return 1;
+    }
+
     int K[2][2];
+    /* K = C * P^{-1}  (since C = K * P) */
     mult2x2(C, Pinv, K);
-    printf("Recovered key matrix K (mod 26):\n");
-    printf("[%d %d]\n[%d %d]\n", K[0][0], K[0][1], K[1][0], K[1][1]);
+
+    printf("\nRecovered key matrix K (mod 26):\n");
+    printf("[ %2d  %2d ]\n[ %2d  %2d ]\n",
+           K[0][0], K[0][1], K[1][0], K[1][1]);
+
     return 0;
 }
+
