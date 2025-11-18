@@ -1,0 +1,131 @@
+/* sub_hillclimb.c
+   Monoalphabetic substitution solver using hillclimbing + scoring.
+   Compile: gcc sub_hillclimb.c -o sub_hillclimb -lm
+   Usage: ./sub_hillclimb
+   Note: This is heuristic. For best results supply longer ciphertexts.
+*/
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+#include <time.h>
+#include <math.h>
+
+const double english_unigram_freq[26] = {
+  8.167,1.492,2.782,4.253,12.702,2.228,2.015,6.094,6.966,0.153,0.772,4.025,2.406,
+  6.749,7.507,1.929,0.095,5.987,6.327,9.056,2.758,0.978,2.360,0.150,1.974,0.074
+};
+
+void clean(const char *in, char *out){
+    int j=0; for(int i=0; in[i]; ++i) if(isalpha(in[i])) out[j++]=tolower(in[i]); out[j]=0;
+}
+
+void apply_key(const char *ct, char *out, char key[26]){
+    for(int i=0;i<(int)strlen(ct);i++){
+        out[i] = key[ct[i]-'a'];
+    }
+    out[strlen(ct)]=0;
+}
+
+double score_text(const char *txt){
+    // simple log-likelihood using digram frequencies (approx)
+    // more sophisticated: use quadgrams file.
+    int n = strlen(txt);
+    if(n==0) return -1e9;
+    double score = 0.0;
+    static double digram_w[26][26];
+    static int inited=0;
+    if(!inited){
+        // initialize rough weights: prefer common letters adjacency (this is very rough)
+        for(int i=0;i<26;i++) for(int j=0;j<26;j++) digram_w[i][j]=1.0;
+        // reward vowels adjacency etc (rough)
+        const char *common = "thheaanndd";
+        for(int k=0; common[k+1]; k+=2){
+            int a=common[k]-'a', b=common[k+1]-'a'; digram_w[a][b]+=5;
+        }
+        inited=1;
+    }
+    for(int i=0;i<n-1;i++){
+        int a=txt[i]-'a', b=txt[i+1]-'a';
+        score += log(digram_w[a][b]);
+    }
+    return score;
+}
+
+void random_key(char key[26]){
+    for(int i=0;i<26;i++) key[i]='a'+i;
+    for(int i=25;i>0;i--){
+        int j = rand()%(i+1);
+        char t=key[i]; key[i]=key[j]; key[j]=t;
+    }
+}
+
+void swap_chars(char *k, int i, int j){
+    char ai = k[i], aj = k[j];
+    for(int x=0;x<26;x++){
+        if(k[x]==ai) k[x]=aj;
+        else if(k[x]==aj) k[x]=ai;
+    }
+}
+
+int main(){
+    srand(time(NULL));
+    char input[4096]; printf("Enter ciphertext:\n");
+    if(!fgets(input,sizeof input,stdin)) return 0;
+    input[strcspn(input,"\n")] = 0;
+    char ct[4096]; clean(input, ct);
+    if(strlen(ct)<4){ printf("Ciphertext too short for reliable attack.\n"); return 0; }
+    int restarts = 2000;
+    int iters = 1000;
+    int bestN = 10;
+    struct cand { double sc; char plain[4096]; char key[26]; };
+    struct cand bests[20];
+    for(int i=0;i<bestN;i++) bests[i].sc = -1e300;
+
+    for(int r=0;r<restarts;r++){
+        char key[26];
+        random_key(key);
+        char plain[4096], bestplain[4096], bestkey[26];
+        apply_key(ct, plain, key);
+        double cur_sc = score_text(plain);
+        strcpy(bestplain, plain); memcpy(bestkey, key, 26); double best_sc = cur_sc;
+
+        for(int it=0; it<iters; it++){
+            // propose swap in substitution mapping: swap two letters in key image
+            int a = rand()%26, b = rand()%26; if(a==b) continue;
+            // Instead of swapping key array indices (which map cipher->plain), we'll swap outputs by swapping characters
+            char newkey[26]; memcpy(newkey, key, 26);
+            // swap characters newkey positions
+            char ca = newkey[a], cb = newkey[b];
+            for(int k=0;k<26;k++){
+                if(newkey[k]==ca) newkey[k]=cb;
+                else if(newkey[k]==cb) newkey[k]=ca;
+            }
+            apply_key(ct, plain, newkey);
+            double new_sc = score_text(plain);
+            if(new_sc > cur_sc || (exp(new_sc - cur_sc) > ((double)rand()/RAND_MAX))){
+                // accept
+                memcpy(key, newkey, 26);
+                cur_sc = new_sc;
+                if(new_sc > best_sc){ best_sc=new_sc; strcpy(bestplain, plain); memcpy(bestkey, key, 26); }
+            }
+        }
+        // try to insert into bests
+        for(int i=0;i<bestN;i++){
+            if (bests[i].sc < best_sc){
+                // shift down
+                for(int j=bestN-1;j>i;j--) bests[j]=bests[j-1];
+                bests[i].sc = best_sc;
+                strcpy(bests[i].plain, bestplain);
+                memcpy(bests[i].key, bestkey, 26);
+                break;
+            }
+        }
+    }
+
+    printf("Top %d candidates:\n", bestN);
+    for(int i=0;i<bestN;i++){
+        printf("%2d) score=%.2f : %s\n", i+1, bests[i].sc, bests[i].plain);
+    }
+    return 0;
+}
