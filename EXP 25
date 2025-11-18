@@ -1,0 +1,67 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <inttypes.h>
+
+// Euclidean algorithm for GCD
+uint64_t gcd(uint64_t a, uint64_t b) {
+    while (b != 0) {
+        uint64_t temp = b;
+        b = a % b;
+        a = temp;
+    }
+    return a;
+}
+
+// Extended Euclidean Algorithm to find modular inverse
+int64_t egcd(int64_t a, int64_t b, int64_t *x, int64_t *y) {
+    if (b == 0) {
+        *x = 1; *y = 0;
+        return a;
+    }
+    int64_t x1, y1;
+    int64_t g = egcd(b, a % b, &x1, &y1);
+    *x = y1;
+    *y = x1 - (a / b) * y1;
+    return g;
+}
+
+int64_t modinv(int64_t a, int64_t m) {
+    int64_t x, y;
+    int64_t g = egcd(a, m, &x, &y);
+    if (g != 1) return -1;
+    x %= m;
+    if (x < 0) x += m;
+    return x;
+}
+
+int main() {
+    uint64_t n = 3599;  // RSA modulus (example)
+    uint64_t e = 31;    // Public exponent
+    uint64_t blocks[] = {123, 59, 2345, 678};  // Example plaintext blocks
+    int num_blocks = 4;
+
+    printf("Checking blocks for common factors with n = %" PRIu64 "...\n\n", n);
+
+    for (int i = 0; i < num_blocks; i++) {
+        uint64_t p = gcd(blocks[i], n);
+        if (p > 1 && p < n) {
+            printf("Found factor! Block %" PRIu64 " has gcd % " PRIu64 " with n.\n", blocks[i], p);
+            uint64_t q = n / p;
+            printf("p = %" PRIu64 "\nq = %" PRIu64 "\n", p, q);
+
+            uint64_t phi = (p - 1) * (q - 1);
+            printf("phi(n) = %" PRIu64 "\n", phi);
+
+            int64_t d = modinv(e, phi);
+            if (d != -1)
+                printf("Private key d = %lld\n", (long long)d);
+            else
+                printf("Could not compute modular inverse.\n");
+
+            return 0;  // Stop after finding one factor
+        }
+    }
+
+    printf("No plaintext blocks share a factor with n.\n");
+    return 0;
+}
