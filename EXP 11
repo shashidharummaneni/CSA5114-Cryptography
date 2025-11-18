@@ -1,0 +1,21 @@
+/* playfair_keyspace.c
+   Compile: gcc playfair_keyspace.c -o playfair_keyspace -lm
+   Usage: ./playfair_keyspace
+*/
+#include <stdio.h>
+#include <math.h>
+
+double log2_factorial(int n) {
+    // use Stirling approximation's log2(n!)
+    double sum = 0.0;
+    for (int i=1;i<=n;i++) sum += log2((double)i);
+    return sum;
+}
+
+int main(void) {
+    double log2_25 = log2_factorial(25);
+    double log2_24 = log2_factorial(24);
+    printf("25! ≈ 2^%.6f (≈ 1.5511210043330986e25)\n", log2_25);
+    printf("Effective unique keys (25!/25 = 24!) ≈ 2^%.6f (≈ 6.2044840173323944e23)\n", log2_24);
+    return 0;
+}
