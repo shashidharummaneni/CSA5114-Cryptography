@@ -1,0 +1,82 @@
+/* hill2x2.c
+   Compile: gcc hill2x2.c -o hill2x2
+   Usage: ./hill2x2
+*/
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+int mod26(int x) { x%=26; if (x<0) x+=26; return x; }
+
+int egcd(int a, int b, int *x, int *y) {
+    if (b==0) { *x=1; *y=0; return a; }
+    int x1,y1;
+    int g = egcd(b, a%b, &x1, &y1);
+    *x = y1;
+    *y = x1 - (a/b) * y1;
+    return g;
+}
+
+int modinv(int a, int m) {
+    int x,y;
+    if (egcd(a,m,&x,&y) != 1) return -1;
+    x %= m; if (x<0) x+=m;
+    return x;
+}
+
+void clean_text(const char *in, char *out) {
+    int j=0;
+    for (int i=0; in[i]; ++i) if (isalpha(in[i])) out[j++]=tolower(in[i]);
+    out[j]=0;
+    // pad with 'x' if odd
+    if (j%2) { out[j++]='x'; out[j]=0; }
+}
+
+int main(void) {
+    int K[2][2] = {{9,4},{5,7}};
+    char plain_in[] = "meet me at the usual place at ten rather than eight oclock";
+    char plain[1024];
+    clean_text(plain_in, plain);
+    int n = strlen(plain);
+    printf("Prepared plaintext (letters only, lower):\n%s\n\n", plain);
+
+    // encrypt
+    char cipher[1024]; int ci=0;
+    for (int i=0;i<n;i+=2) {
+        int v0 = plain[i]-'a', v1 = plain[i+1]-'a';
+        int c0 = mod26(K[0][0]*v0 + K[0][1]*v1);
+        int c1 = mod26(K[1][0]*v0 + K[1][1]*v1);
+        cipher[ci++]= 'a' + c0;
+        cipher[ci++]= 'a' + c1;
+        printf("Pair '%c%c' -> [%d,%d]  -> [%d,%d] -> '%c%c'\n",
+               plain[i], plain[i+1], v0, v1, c0, c1, 'a'+c0, 'a'+c1);
+    }
+    cipher[ci]=0;
+    printf("\nCiphertext: %s\n\n", cipher);
+
+    // compute inverse matrix
+    int det = mod26(K[0][0]*K[1][1] - K[0][1]*K[1][0]);
+    int invdet = modinv(det, 26);
+    printf("det = %d  invdet(mod26) = %d\n", det, invdet);
+    int adj[2][2] = {{K[1][1], -K[0][1]}, {-K[1][0], K[0][0]}};
+    int inv[2][2];
+    for (int r=0;r<2;r++) for (int c=0;c<2;c++) inv[r][c] = mod26(invdet * adj[r][c]);
+
+    printf("Inverse matrix mod26:\n");
+    for (int r=0;r<2;r++) printf("%d %d\n", inv[r][0], inv[r][1]);
+
+    // decrypt and show
+    char dec[1024]; int di=0;
+    for (int i=0;i<ci;i+=2) {
+        int cv0 = cipher[i]-'a', cv1 = cipher[i+1]-'a';
+        int p0 = mod26(inv[0][0]*cv0 + inv[0][1]*cv1);
+        int p1 = mod26(inv[1][0]*cv0 + inv[1][1]*cv1);
+        dec[di++]= 'a' + p0;
+        dec[di++]= 'a' + p1;
+        printf("Cipher pair '%c%c' -> [%d,%d] -> [%d,%d] -> '%c%c'\n",
+               cipher[i], cipher[i+1], cv0, cv1, p0, p1, 'a'+p0, 'a'+p1);
+    }
+    dec[di]=0;
+    printf("\nDecrypted text: %s\n", dec);
+    return 0;
+}
