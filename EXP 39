@@ -1,0 +1,98 @@
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_TEXT_LEN 1024
+#define ALPHABET_SIZE 26
+
+// English letter frequency distribution (%)
+const double english_freq[ALPHABET_SIZE] = {
+    8.167, 1.492, 2.782, 4.253, 12.702,
+    2.228, 2.015, 6.094, 6.966, 0.153,
+    0.772, 4.025, 2.406, 6.749, 7.507,
+    1.929, 0.095, 5.987, 6.327, 9.056,
+    2.758, 0.978, 2.360, 0.150, 1.974,
+    0.074
+};
+
+// Function to score decrypted text based on letter frequency
+double score_text(const char *text) {
+    int count[ALPHABET_SIZE] = {0};
+    int total = 0;
+    double score = 0.0;
+
+    for (int i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            count[tolower(text[i]) - 'a']++;
+            total++;
+        }
+    }
+
+    if (total == 0) return 0;
+
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        double freq = (double)count[i] / total * 100;
+        score += freq * english_freq[i];
+    }
+
+    return score;
+}
+
+// Function to decrypt with a given shift
+void decrypt(const char* cipher, char* output, int shift) {
+    for (int i = 0; cipher[i]; i++) {
+        if (isalpha(cipher[i])) {
+            char base = isupper(cipher[i]) ? 'A' : 'a';
+            output[i] = (cipher[i] - base - shift + ALPHABET_SIZE) % ALPHABET_SIZE + base;
+        } else {
+            output[i] = cipher[i];
+        }
+    }
+}
+
+// Main program
+int main() {
+    char ciphertext[MAX_TEXT_LEN];
+    char potential_plain[ALPHABET_SIZE][MAX_TEXT_LEN];
+    double scores[ALPHABET_SIZE];
+    int topN;
+
+    printf("Enter the ciphertext: ");
+    fgets(ciphertext, MAX_TEXT_LEN, stdin);
+    ciphertext[strcspn(ciphertext, "\n")] = '\0';  // Remove newline
+
+    printf("Enter how many top results to display: ");
+    scanf("%d", &topN);
+    if (topN > ALPHABET_SIZE) topN = ALPHABET_SIZE;
+
+    // Try all possible shifts
+    for (int shift = 0; shift < ALPHABET_SIZE; shift++) {
+        decrypt(ciphertext, potential_plain[shift], shift);
+        scores[shift] = score_text(potential_plain[shift]);
+    }
+
+    // Rank results using a simple bubble sort
+    for (int i = 0; i < ALPHABET_SIZE - 1; i++) {
+        for (int j = 0; j < ALPHABET_SIZE - i - 1; j++) {
+            if (scores[j] < scores[j + 1]) {
+                double temp_score = scores[j];
+                char temp_text[MAX_TEXT_LEN];
+
+                scores[j] = scores[j + 1];
+                strcpy(temp_text, potential_plain[j]);
+                scores[j] = scores[j + 1];
+                strcpy(potential_plain[j], potential_plain[j + 1]);
+                scores[j + 1] = temp_score;
+                strcpy(potential_plain[j + 1], temp_text);
+            }
+        }
+    }
+
+    // Display results
+    printf("\nTop %d probable plaintexts:\n", topN);
+    for (int i = 0; i < topN; i++) {
+        printf("\nRank %d (Score = %.2f):\n%s\n", i + 1, scores[i], potential_plain[i]);
+    }
+
+    return 0;
+}
