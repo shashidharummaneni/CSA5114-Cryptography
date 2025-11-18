@@ -1,0 +1,28 @@
+/* des_subkeys_reverse.c  (snippet)
+   This snippet shows generating subkeys then using them reversed for decryption.
+   Integrate into a full DES implementation.
+*/
+#include <stdint.h>
+#include <stdio.h>
+// Assume you have functions pc1(), pc2(), left_rotate28()
+void generate_subkeys(uint64_t key56, uint64_t subkeys[16]) {
+    uint32_t C = (key56 >> 28) & 0x0FFFFFFF;
+    uint32_t D = key56 & 0x0FFFFFFF;
+    const int shifts[16] = {1,1,2,2,2,2,2,2,1,2,2,2,2,2,2,1};
+    for(int i=0;i<16;i++){
+        // left rotate C and D
+        int s = shifts[i];
+        C = ((C << s) | (C >> (28 - s))) & 0x0FFFFFFF;
+        D = ((D << s) | (D >> (28 - s))) & 0x0FFFFFFF;
+        uint64_t cd = ((uint64_t)C << 28) | (uint64_t)D;
+        subkeys[i] = pc2(cd); // pc2 returns 48-bit in 64-bit container
+    }
+}
+
+int main(){
+    uint64_t key56 = /* result of PC-1 on 64-bit key */;
+    uint64_t subkeys[16];
+    generate_subkeys(key56, subkeys);
+    // For decryption use subkeys[15]..subkeys[0]
+    return 0;
+}
