@@ -1,0 +1,53 @@
+/* otp_vigenere.c
+   Encrypt/decrypt with numeric key stream (0..25)
+   Compile: gcc otp_vigenere.c -o otp_vigenere
+*/
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+
+void clean(const char *in, char *out){
+    int j=0;
+    for(int i=0; in[i]; ++i) if (isalpha(in[i])) out[j++]=tolower(in[i]);
+    out[j]=0;
+}
+
+void encrypt(const char *plain, int key[], int klen, char *out){
+    int n = strlen(plain);
+    for(int i=0;i<n;i++){
+        int p = plain[i]-'a';
+        int c = (p + key[i%klen]) % 26;
+        out[i] = 'a' + c;
+    }
+    out[n]=0;
+}
+
+void compute_key_from_cipher_plain(const char *cipher, const char *plain, int key[]){
+    int n=strlen(plain);
+    for(int i=0;i<n;i++){
+        int c = cipher[i]-'a';
+        int p = plain[i]-'a';
+        key[i] = (c - p + 26) % 26;
+    }
+}
+
+int main(){
+    const char *pt = "send more money";
+    int key_stream[] = {9,0,1,7,23,15,21,14,11,11,2,8,9};
+    char plain[64]; clean(pt, plain);
+    char cipher[64];
+    encrypt(plain, key_stream, sizeof(key_stream)/sizeof(int), cipher);
+    printf("Plain (clean): %s\n", plain);
+    printf("Key stream: ");
+    for(int i=0;i<13;i++) printf("%d ", key_stream[i]); printf("\n");
+    printf("Ciphertext: %s\n\n", cipher);
+
+    // part (b): find key so that ciphertext decrypts to "cash not needed"
+    char pt2[64]; clean("cash not needed", pt2);
+    int key2[64];
+    compute_key_from_cipher_plain(cipher, pt2, key2);
+    printf("To make ciphertext '%s' decrypt to '%s' the key stream is:\n", cipher, pt2);
+    for(int i=0;i<strlen(pt2);i++) printf("%d ", key2[i]);
+    printf("\n");
+    return 0;
+}
