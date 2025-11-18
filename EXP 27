@@ -1,0 +1,97 @@
+#include <stdio.h>
+#include <stdint.h>
+#include <string.h>
+#include <inttypes.h>
+
+/* fast modular exponentiation: computes base^exp mod mod */
+uint64_t modexp(uint64_t base, uint64_t exp, uint64_t mod) {
+    uint64_t result = 1;
+    base %= mod;
+    while (exp > 0) {
+        if (exp & 1) result = (result * base) % mod;
+        base = (base * base) % mod;
+        exp >>= 1;
+    }
+    return result;
+}
+
+/* Map letter (A..Z) to 0..25, nonletters -> -1 */
+int letter_to_int(char c) {
+    if (c >= 'A' && c <= 'Z') return c - 'A';
+    if (c >= 'a' && c <= 'z') return c - 'a';
+    return -1;
+}
+
+/* Map 0..25 to letter A..Z */
+char int_to_letter(int x) {
+    if (x >= 0 && x < 26) return 'A' + x;
+    return '?';
+}
+
+int main(void) {
+    /* Example RSA public key (small for demo). In real world n is huge. */
+    uint64_t p = 61, q = 53;             // small primes for demo
+    uint64_t n = p * q;                  // n = 3233
+    uint64_t e = 17;                     // public exponent (example)
+    /* (we don't need d here for the attack demonstration) */
+
+    printf("Demo public key (e,n) = (%" PRIu64 ", %" PRIu64 ")\n\n", e, n);
+
+    /* Example plaintext message (letters only). Each letter encoded 0..25 */
+    const char *plaintext = "HELLO";
+    size_t L = strlen(plaintext);
+
+    /* Encryption (what Alice does): encrypt each letter separately */
+    uint64_t ciphertext[L];
+    printf("Plaintext: %s\n", plaintext);
+    printf("Numeric plaintext blocks: ");
+    for (size_t i = 0; i < L; ++i) {
+        int m = letter_to_int(plaintext[i]);
+        if (m < 0) { ciphertext[i] = 0; printf("? "); continue; }
+        printf("%d ", m);
+        ciphertext[i] = modexp((uint64_t)m, e, n);
+    }
+    printf("\nCiphertext blocks (as integers mod n): ");
+    for (size_t i = 0; i < L; ++i) printf("%" PRIu64 " ", ciphertext[i]);
+    printf("\n\n");
+
+    /* ----- ATTACKER: ciphertext-only attack using public (e,n) ----- */
+    /* Precompute encryption table for all 26 possible letters */
+    uint64_t table[26];
+    for (int m = 0; m < 26; ++m) {
+        table[m] = modexp((uint64_t)m, e, n);
+    }
+
+    /* Build reverse map: ciphertext value -> plaintext letter (if unique) */
+    /* Note: For real huge n, use a hash map; here we do linear search over 26 entries. */
+    char recovered[L+1];
+    recovered[L] = '\0';
+    for (size_t i = 0; i < L; ++i) {
+        int found = 0;
+        for (int m = 0; m < 26; ++m) {
+            if (table[m] == ciphertext[i]) {
+                recovered[i] = int_to_letter(m);
+                found = 1;
+                break;
+            }
+        }
+        if (!found) recovered[i] = '?';
+    }
+
+    printf("Attacker recovered plaintext (lookup attack): %s\n", recovered);
+
+    /* Also show vulnerability: identical letters -> identical ciphertext blocks */
+    printf("\nNote: identical letters produce identical ciphertext blocks.\n");
+    printf("This allows frequency analysis when messages are longer.\n\n");
+
+    /* Defense suggestions */
+    printf("Defenses (what to do instead):\n");
+    printf(" - Do NOT encrypt tiny deterministic blocks with textbook RSA.\n");
+    printf(" - Use proper randomized padding (e.g., RSA-OAEP) before RSA encryption.\n");
+    printf(" - Use hybrid encryption: generate a random symmetric key, encrypt bulk data with a\n");
+    printf("   secure symmetric cipher (AES-GCM), then encrypt the symmetric key with RSA.\n");
+    printf(" - Pack multiple letters into a single large integer block ( > 26^k ) and use\n");
+    printf("   randomized padding so plaintext space is large and non-deterministic.\n");
+
+    return 0;
+}
