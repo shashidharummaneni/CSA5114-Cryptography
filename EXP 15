@@ -1,0 +1,72 @@
+/* caesar_freq_crack.c
+   Try all 26 shifts, rank by chi-squared against English letter freq.
+   Compile: gcc caesar_freq_crack.c -o caesar_freq_crack -lm
+*/
+#include <stdio.h>
+#include <string.h>
+#include <ctype.h>
+#include <stdlib.h>
+#include <math.h>
+
+double eng_freq[26] = {
+  8.167,1.492,2.782,4.253,12.702,2.228,2.015,6.094,6.966,0.153,
+  0.772,4.025,2.406,6.749,7.507,1.929,0.095,5.987,6.327,9.056,
+  2.758,0.978,2.360,0.150,1.974,0.074
+};
+
+void clean(const char *in, char *out){
+    int j=0;
+    for(int i=0; in[i]; ++i)
+      if (isalpha(in[i])) out[j++]=tolower(in[i]);
+    out[j]=0;
+}
+
+double chi_squared(const char *text){
+    int n=strlen(text);
+    if(n==0) return 1e9;
+    int obs[26]={0};
+    for(int i=0;i<n;i++) obs[text[i]-'a']++;
+    double chi=0.0;
+    for(int i=0;i<26;i++){
+        double expected = eng_freq[i] * n / 100.0;
+        double d = obs[i]-expected;
+        chi += d*d / (expected+1e-9);
+    }
+    return chi;
+}
+
+int main(int argc,char **argv){
+    char input[1024];
+    printf("Enter ciphertext: ");
+    if (!fgets(input,sizeof input,stdin)) return 0;
+    input[strcspn(input,"\n")] = 0;
+    char ct[1024]; clean(input, ct);
+    int topn = 10;
+    if (argc>1) topn = atoi(argv[1]);
+    struct cand { int shift; double score; char text[1024]; };
+    struct cand cands[26];
+    int n = strlen(ct);
+    for(int s=0;s<26;s++){
+        char plain[1024];
+        for(int i=0;i<n;i++){
+            plain[i] = 'a' + ( (ct[i]-'a' - s + 26) % 26 );
+        }
+        plain[n]=0;
+        cands[s].shift = s;
+        cands[s].score = chi_squared(plain);
+        strcpy(cands[s].text, plain);
+    }
+    // sort ascending by score
+    qsort(cands,26,sizeof(cands[0]), (int(*)(const void*,const void*)) ( 
+        [](const void *a,const void *b){
+            double da = ((struct cand*)a)->score;
+            double db = ((struct cand*)b)->score;
+            return (da>db) - (da<db);
+        }
+    ));
+    printf("Top %d candidates:\n", topn);
+    for(int i=0;i<topn && i<26;i++){
+        printf("%2d) shift=%2d score=%.2f : %s\n", i+1, cands[i].shift, cands[i].score, cands[i].text);
+    }
+    return 0;
+}
