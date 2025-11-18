@@ -1,0 +1,132 @@
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
+
+#define MAX_TEXT_LEN 1024
+#define ALPHABET_SIZE 26
+
+// English letter frequency distribution (%)
+const double english_freq[ALPHABET_SIZE] = {
+    8.167, 1.492, 2.782, 4.253, 12.702,
+    2.228, 2.015, 6.094, 6.966, 0.153,
+    0.772, 4.025, 2.406, 6.749, 7.507,
+    1.929, 0.095, 5.987, 6.327, 9.056,
+    2.758, 0.978, 2.360, 0.150, 1.974,
+    0.074
+};
+
+// Structure to store text and score
+typedef struct {
+    char plaintext[MAX_TEXT_LEN];
+    double score;
+} Candidate;
+
+// Compare function for sorting candidates by score
+int compareCandidates(const void *a, const void *b) {
+    double diff = ((Candidate *)b)->score - ((Candidate *)a)->score;
+    return (diff > 0) - (diff < 0);
+}
+
+// Function to calculate score based on frequency match
+double scoreText(const char *text) {
+    int count[ALPHABET_SIZE] = {0};
+    int total = 0;
+    double score = 0.0;
+
+    for (int i = 0; text[i]; i++) {
+        if (isalpha(text[i])) {
+            count[tolower(text[i]) - 'a']++;
+            total++;
+        }
+    }
+    if (total == 0) return 0;
+
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        double freq = (double)count[i] / total * 100;
+        score += freq * english_freq[i];
+    }
+
+    return score;
+}
+
+// Generate mapping guesses based on frequency order
+void generateDecryption(const char *ciphertext, char *plaintext, const char *map) {
+    for (int i = 0; ciphertext[i]; i++) {
+        if (isalpha(ciphertext[i])) {
+            plaintext[i] = isupper(ciphertext[i]) ? toupper(map[tolower(ciphertext[i]) - 'a'])
+                                                 : map[ciphertext[i] - 'a'];
+        } else {
+            plaintext[i] = ciphertext[i];
+        }
+    }
+}
+
+// Frequency-based attack on substitution cipher
+int main() {
+    char ciphertext[MAX_TEXT_LEN];
+    char plaintext[MAX_TEXT_LEN];
+    char map[ALPHABET_SIZE];
+    Candidate candidates[ALPHABET_SIZE];
+    int topN;
+
+    printf("Enter the ciphertext: ");
+    fgets(ciphertext, MAX_TEXT_LEN, stdin);
+    ciphertext[strcspn(ciphertext, "\n")] = '\0';
+
+    printf("Enter the number of guesses to print (e.g., 10): ");
+    scanf("%d", &topN);
+    if (topN > ALPHABET_SIZE) topN = ALPHABET_SIZE;
+
+    // Count letter frequency in ciphertext
+    int freq[ALPHABET_SIZE] = {0};
+    for (int i = 0; ciphertext[i]; i++) {
+        if (isalpha(ciphertext[i])) {
+            freq[tolower(ciphertext[i]) - 'a']++;
+        }
+    }
+
+    // Create initial mapping: most frequent ciphertext letter -> 'e', next -> 't'...
+    const char freq_order[ALPHABET_SIZE + 1] = "etaoinshrdlucmfwypvbgkjqxz";  // English frequency order
+
+    // Index array sorted by frequency in ciphertext
+    int idx[ALPHABET_SIZE];
+    for (int i = 0; i < ALPHABET_SIZE; i++) idx[i] = i;
+
+    // Sort idx by descending frequency
+    for (int i = 0; i < ALPHABET_SIZE - 1; i++) {
+        for (int j = i + 1; j < ALPHABET_SIZE; j++) {
+            if (freq[idx[j]] > freq[idx[i]]) {
+                int tmp = idx[i];
+                idx[i] = idx[j];
+                idx[j] = tmp;
+            }
+        }
+    }
+
+    // Create decrypted messages based on guess
+    for (int i = 0; i < ALPHABET_SIZE; i++) {
+        char temp_map[ALPHABET_SIZE];
+        memcpy(temp_map, map, ALPHABET_SIZE);
+
+        for (int j = 0; j < ALPHABET_SIZE; j++) {
+            temp_map[idx[j]] = freq_order[(j + i) % ALPHABET_SIZE];
+        }
+
+        generateDecryption(ciphertext, plaintext, temp_map);
+        plaintext[strlen(ciphertext)] = '\0';
+
+        strcpy(candidates[i].plaintext, plaintext);
+        candidates[i].score = scoreText(plaintext);
+    }
+
+    qsort(candidates, ALPHABET_SIZE, sizeof(Candidate), compareCandidates);
+
+    // Output the top N guesses
+    printf("\nTop %d probable plaintexts:\n", topN);
+    for (int i = 0; i < topN; i++) {
+        printf("\nRank %d (Score: %.2f):\n%s\n", i + 1, candidates[i].score, candidates[i].plaintext);
+    }
+
+    return 0;
+}
