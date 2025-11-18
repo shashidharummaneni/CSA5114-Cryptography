@@ -1,0 +1,49 @@
+#include <stdio.h>
+#include <ctype.h>
+#include <string.h>
+
+// Function to compute modular inverse of a modulo m
+int modInverse(int a, int m) {
+    for (int x = 1; x < m; x++) {
+        if ((a * x) % m == 1) {
+            return x;
+        }
+    }
+    return -1; // No inverse exists
+}
+
+// Function for affine decryption: P = a_inv * (C - b) mod 26
+char affineDecrypt(char ch, int a_inv, int b) {
+    if (isalpha(ch)) {
+        int isLower = islower(ch);
+        ch = toupper(ch);
+        int c = ch - 'A'; // Ciphertext number
+        int p = a_inv * (c - b + 26) % 26; // Add 26 to avoid negative
+        char res = p + 'A';
+        return isLower ? tolower(res) : res;
+    }
+    return ch; // Non-alphabetic stays unchanged
+}
+
+int main() {
+    char ciphertext[200], plaintext[200];
+    int a = 3, b = 15;
+    int a_inv = modInverse(a, 26);
+
+    if (a_inv == -1) {
+        printf("Cannot decrypt. 'a' and 26 must be coprime.\n");
+        return 1;
+    }
+
+    printf("Enter ciphertext: ");
+    fgets(ciphertext, sizeof(ciphertext), stdin);
+
+    for (int i = 0; ciphertext[i] != '\0'; i++) {
+        plaintext[i] = affineDecrypt(ciphertext[i], a_inv, b);
+    }
+    plaintext[strlen(ciphertext)] = '\0';
+
+    printf("Decrypted Plaintext: %s\n", plaintext);
+
+    return 0;
+}
